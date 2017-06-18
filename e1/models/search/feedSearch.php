@@ -34,8 +34,8 @@ class feedSearch extends feed
     public function rules(): array
     {
         return [
-            'title' => 'required|string|max:255',
-            'content' => 'required|string|max:255',
+            'title' => 'string|max:255',
+            'content' => 'string|max:255',
             'link' => 'string|max:255',
 
             'url' => 'active_url',

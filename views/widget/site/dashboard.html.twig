@@ -2,19 +2,192 @@
     {% set breadcrumbs = {'name': 'Dashboard', 'min': 'your channels'|trans } %}
 {% block content %}
 
-
-   {{ url('channel.v1.index') }}
-    <br>
-   {{ url('feed.v1.index') }}
-
-
-    <div class="box box-solid">
-        <div class="box-header with-border">
-            <h3 class="box-title">Collapsible Accordion</h3>
+    <div class="row">
+        <div class="col-md-6">
+            <div class="box box-solid">
+                <div class="box-header with-border">
+                    <h3 class="box-title">Channels</h3>
+                </div>
+                <div class="box-body scroll-container scroll-container--channel">
+                    <ul class="box-group scroll-list scroll-list--channel" id="accordion"
+                         data-next-page="1" data-last-page="2" data-position="700">
+                    </ul>
+                </div>
+            </div>
         </div>
-        <div class="box-body">
-            <div class="box-group" id="accordion">
-                <!-- we are adding the .panel class so bootstrap.js collapse plugin detects it -->
+
+        <div class="col-md-6">
+            <div class="box box-solid">
+                <div class="box-header with-border">
+                    <h3 class="box-title">Feeds</h3>
+                </div>
+                <div class="box-body scroll-container scroll-container--feed">
+                    <div class="scroll-list scroll-list--feed" id="accordion"
+                        data-next-page="1" data-last-page="2" data-position="700" data-channel-url="">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var listChannel = $('.scroll-list--channel');
+        var listFeed = $('.scroll-list--feed');
+
+        // заполняем данными для первой страницы
+        getChannels(listChannel);
+
+        // нужно потому что обработчик срабатывает несколько раз
+        var can = true;
+
+        // scroll
+        $('.scroll-container--channel').scroll(function () {
+
+            // текущая высота в px от начала окна
+            var currentPosition = $(window).height() + $(this).scrollTop() - 60 - 60;
+
+            var position = listChannel.data('position');
+
+            // если текущее место ниже той позиции, с которой должна начаться подгрузка данных
+            if (currentPosition > position) {
+                if (can) {
+                    getChannels(listChannel);
+                    can = false;
+                }
+
+            }
+        });
+
+        $('.scroll-container--feed').scroll(function () {
+
+            // текущая высота в px от начала окна
+            var currentPosition = $(window).height() + $(this).scrollTop() - 60 - 60;
+
+            var position = listFeed.data('position');
+
+            // если текущее место ниже той позиции, с которой должна начаться подгрузка данных
+            if (currentPosition > position) {
+                if (can) {
+                    getFeeds(listFeed);
+                    can = false;
+                }
+
+            }
+        });
+
+        function getChannels(list) {
+            var page = list.data('nextPage');
+
+            $.ajax({
+                url: "/en/v1/channel/list",
+                type: 'POST',
+                data: JSON.stringify({'current_page': page}),
+                beforeSend: function(request) {
+                    request.setRequestHeader('Accept', 'application/json');
+                },
+                success: function (response) {
+
+                    // если это не последняя страница
+                    if(response.data.last_page !== response.data.current_page){
+                        can = true;
+                        //устанавливаем номер следующей страницы, куда будем кидать запрос
+                        list.data('nextPage', response.data.current_page + 1);
+                    }
+
+                    console.log(response.data);
+
+                    // добавляем новые элементы в <ul>
+                    $.each(response.data.data, function (key, item) {
+
+                        list.append('<li>' +
+                            '<a href="#" class="channel-item" data-url="'+ item.url +'">' +
+                            item.name +
+                            '</a>' +
+                            '</li>');
+                    });
+
+                    list.data('lastPage', response.data.last_page);
+                    list.data('position', list.height() - 100); //устанавливаем позицию в px откуда будет происходить подгрузка данных
+                }
+            });
+        }
+
+        function getFeeds(list) {
+            var page = list.data('nextPage');
+            var url = list.data('channelUrl');
+
+            $.ajax({
+                url: "/en/v1/feed/list",
+                type: 'POST',
+                data: JSON.stringify({'current_page': page, 'url': url}),
+                beforeSend: function(request) {
+                    request.setRequestHeader('Accept', 'application/json');
+                },
+                success: function (response) {
+
+                    // если это не последняя страница
+                    if(response.data.last_page !== response.data.current_page){
+                        can = true;
+                        //устанавливаем номер следующей страницы, куда будем кидать запрос
+                        list.data('nextPage', response.data.current_page + 1);
+                    }
+
+                    console.log(response.data);
+
+                    // добавляем новые элементы в <ul>
+                    $.each(response.data.data, function (key, item) {
+                        var feed = generateFeed(key, item);
+                        list.append(feed);
+                    });
+
+                    list.data('lastPage', response.data.last_page);
+                    list.data('position', list.height() - 100); //устанавливаем позицию в px откуда будет происходить подгрузка данных
+                }
+            });
+        }
+
+        $(document).on('click', '.channel-item', function () {
+            var url = $(this).data('url');
+
+            //устанавливаем data-атрибут: url канала (для фильтра)
+            listFeed.data('channelUrl', url);
+            getFeeds(listFeed);
+
+            return false;
+        });
+
+        function generateFeed(key, feed) {
+            return '<div class="panel box box-primary">' +
+
+                    '<div class="box-header with-border">' +
+                    '<h4 class="box-title">' +
+                    '<a data-toggle="collapse" data-parent="#accordion" href="#collapse'+key+'">' +
+                    feed.title +
+                    '</a>' +
+                    '</h4>' +
+                    '</div>' +
+
+                    '<div id="collapse'+key+'" class="panel-collapse collapse">' +
+                    '<div class="box-body">' +
+                        '<p><a href="'+feed.link+'">' +
+                        'link' +
+                        '</a></p>' +
+                    feed.content +
+                    '</div>' +
+                    '</div>' +
+                    '</div>';
+        }
+    </script>
+
+
+
+
+
+
+
+
+
+
                 <div class="panel box box-primary">
                     <div class="box-header with-border">
                         <h4 class="box-title">
@@ -35,6 +208,7 @@
                         </div>
                     </div>
                 </div>
+
                 <div class="panel box box-danger">
                     <div class="box-header with-border">
                         <h4 class="box-title">
@@ -55,6 +229,7 @@
                         </div>
                     </div>
                 </div>
+
                 <div class="panel box box-success">
                     <div class="box-header with-border">
                         <h4 class="box-title">
@@ -75,9 +250,6 @@
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-        <!-- /.box-body -->
-    </div>
+
 
 {% endblock %}
